@@ -16,8 +16,9 @@ accesslog = 'gunicorn_logs/access.log'
 timeout = 600
 
 # 启动的进程数
-# workers = multiprocessing.cpu_count() * 2 + 1
 workers = 1
-# worker_class = 'eventlet'
+worker_class = 'gthread'
+
+threads = 4
 
 x_forwarded_for_header = 'X-FORWARDED-FOR'
