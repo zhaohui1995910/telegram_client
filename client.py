@@ -59,9 +59,7 @@ async def io_test(a):
 
 
 async def io_func():
-    print('io_func 1')
     time.sleep(5)
-    print('io_func 2')
     return 'ok'
 
 

@@ -16,7 +16,7 @@ app = Flask(__name__)
 
 # 此程序只能运行单线程
 
-class Config(object):
+class Config:
     """配置参数"""
     config_env = os.environ.get('SPIDER_WEB_ENV', 'dev').lower()
     # 设置连接数据库的URL
@@ -30,24 +30,11 @@ class Config(object):
     # 禁止自动提交数据处理
     app.config['SQLALCHEMY_COMMIT_ON_TEARDOWN'] = False
 
-
-def add_logger(_app):
-    logging_format = logging.Formatter(
-        '%(asctime)s - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)s - %(message)s'
-    )
-    handler = TimedRotatingFileHandler(
-        "logs/app/log.log",
-        when="D",
-        interval=1,
-        backupCount=15,
-        encoding="UTF-8",
-        delay=False,
-        utc=True
-    )
-    handler.setFormatter(logging_format)
-    handler.setLevel(logging.DEBUG)
-    _app.logger.setLevel(logging.DEBUG)
-    _app.logger.addHandler(handler)
+    # 体验版
+    CRAWL_CHANNEL_MAXCOUNT = 11  # 采集群组数量
+    CRAWL_USER_MAXCOUNT = 6  # 采集群友数量
+    SEDN_CHANNEL_LIMIT = 6  # 发送群组数
+    SEDN_USER_LIMIT = 6  # 发送群友数
 
 
 # 读取配置
@@ -55,7 +42,6 @@ app.config.from_object(Config)
 
 # 创建数据库sqlalchemy工具对象
 db = SQLAlchemy(app)
-add_logger(app)
 
 loop = asyncio.get_event_loop()
 thread_pool = ThreadPoolExecutor(10)

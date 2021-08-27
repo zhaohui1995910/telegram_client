@@ -7,7 +7,7 @@ import re
 import time
 from datetime import datetime
 
-from flask import request
+from flask import request, current_app
 from sqlalchemy import desc
 from sqlalchemy.sql.expression import func
 
@@ -21,12 +21,10 @@ client_map = {}
 
 @app.route('/test')
 def test_func():
-    print('1', client_map)
+    print(current_app.config.get('CRAWL_USER_MAXCOUNT'))
 
     a = request.args.get('kw')
     client_map[a] = a
-
-    print('2', client_map)
 
     db.session.query(Collectionfriend).filter(
         Collectionfriend.create_id == int(1)
@@ -188,6 +186,7 @@ def get_dialogs():
 
 @app.route("/crawl/channel/username", methods=['GET'])
 def spider_group_user():
+    """采集群友"""
     _phone = request.args.get("phone")
     _url = request.args.get("url")
     _user_id = request.args.get("user_id")
@@ -209,7 +208,8 @@ def spider_group_user():
 
     user_id_list = [u.groupmember_id for u in user_list]
 
-    for u in crawl_user_list:
+    crawl_user_maxcount = current_app.config.get('CRAWL_USER_MAXCOUNT')
+    for u in crawl_user_list[:crawl_user_maxcount]:
         if not u.username:
             continue
 
@@ -227,7 +227,7 @@ def spider_group_user():
     db.session.commit()
 
     return_rsult = []
-    for i in crawl_user_list:
+    for i in crawl_user_list[:crawl_user_maxcount]:
         if not i.username:
             continue
 
@@ -238,6 +238,7 @@ def spider_group_user():
 
 @app.route("/user/list", methods=['GET'])
 def get_user():
+    """获取群友列表"""
     user_id = request.args.get("user_id")
     page = request.args.get("page")
     page_size = request.args.get("page_size")
@@ -245,32 +246,6 @@ def get_user():
     result = db.session.query(Collectionfriend).filter(
         Collectionfriend.create_id == int(user_id)
     ).limit(int(page_size)).offset((page - 1) * int(page_size)).all()
-
-    return_rsult = []
-    for i in result:
-        item = {
-            'username'     : i.username,
-            'groupmemberid': i.groupmember_id,
-        }
-        return_rsult.append(item)
-
-    return {'code': 200, 'msg': 'success', 'data': return_rsult}
-
-
-@app.route("/user/random/list", methods=['GET'])
-def get_user_random():
-    user_id = request.args.get("user_id")
-    limit = request.args.get("limit")
-
-    max_count = db.session.query(Collectionfriend).count()
-    if (max_count - limit) <= 0:
-        max_count = 0
-    else:
-        max_count = max_count - limit
-
-    result = db.session.query(Collectionfriend).filter(
-        Collectionfriend.create_id == int(user_id)
-    ).limit(int(limit)).offset(max_count).all()
 
     return_rsult = []
     for i in result:
@@ -324,14 +299,22 @@ def spider_group_url():
                 item.group_url = url
                 item.createtime = datetime.now()
                 item.create_id = int(_user_id)
-
                 db.session.add(item)
 
-        db.session.commit()
+    crawl_channel_maxcount = current_app.config.get('CRAWL_CHANNEL_MAXCOUNT')
+    for r in result[:crawl_channel_maxcount]:
+        item = Collectiongroup()
+        # item.group_name = t.replace('👥', '')  # 因 '👥' 编码问题无法写入数据库
+        item.group_url = r[1]
+        item.createtime = datetime.now()
+        item.create_id = int(_user_id)
+        db.session.add(item)
+
+    db.session.commit()
 
     TLog(
         message_type='crawl_channel_url',
-        message_content='采集群组 %s 条, 去重 %s 条' % (len(msg_list), (len(msg_list) - len(result))),
+        message_content='采集群组 %s 条, 去重 %s 条' % (len(msg_list), (len(msg_list) - len(result[:crawl_channel_maxcount]))),
         client_phone=_phone,
         create_time=datetime.now(),
         create_id=_user_id
@@ -342,6 +325,7 @@ def spider_group_url():
 
 @app.route("/channel/list", methods=['GET'])
 def get_group():
+    """获取群组列表"""
     user_id = request.args.get("user_id")
     page = request.args.get("page")
     page_size = request.args.get("page_size")
@@ -353,34 +337,8 @@ def get_group():
     return_rsult = []
     for i in result:
         item = {
-            'groupname': i.groupname,
-            'group_url': i.group_url,
-        }
-        return_rsult.append(item)
-
-    return {'code': 200, 'msg': 'success', 'data': return_rsult}
-
-
-@app.route("/channel/random/list", methods=['GET'])
-def get_group_random():
-    user_id = request.args.get("user_id")
-    limit = request.args.get("limit")
-
-    max_count = db.session.query(Collectiongroup).count()
-    if (max_count - limit) <= 0:
-        max_count = 0
-    else:
-        max_count = max_count - limit
-
-    result = db.session.query(Collectiongroup).filter(
-        Collectiongroup.create_id == int(user_id)
-    ).limit(int(limit)).offset(max_count).all()
-
-    return_rsult = []
-    for i in result:
-        item = {
-            'groupname': i.groupname,
-            'group_url': i.group_url,
+            'group_name': i.group_name,
+            'group_url' : i.group_url,
         }
         return_rsult.append(item)
 
@@ -421,6 +379,8 @@ def buli_send_to_user():
     phone = request.args.get("phone")
 
     user_count = int(user_count)
+    if user_count > current_app.config.get('SEDN_USER_LIMIT'):
+        user_count = current_app.config.get('SEDN_USER_LIMIT')
 
     # 随机获取用户数
     user_list = db.session.query(Collectionfriend).filter(
@@ -488,6 +448,9 @@ def buli_send_to_channel():
     _client = client_map[phone]
 
     channel_count = int(channel_count)
+    if channel_count > current_app.config.get('SEDN_CHANNEL_LIMIT'):
+        channel_count = current_app.config.get('SEDN_CHANNEL_LIMIT')
+
     _client = client_map[phone]
 
     channel_list = db.session.query(Collectiongroup).filter(
