@@ -1,5 +1,4 @@
 # coding: utf-8
-import multiprocessing
 import os
 
 if not os.path.exists('gunicorn_logs'):
