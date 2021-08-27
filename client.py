@@ -10,8 +10,8 @@ nest_asyncio.apply()
 
 from telethon import TelegramClient
 from telethon.tl.functions.contacts import ImportContactsRequest
-from telethon.tl.types import PeerChannel, InputChannel, InputPhoneContact
-from telethon import functions, types
+from telethon.tl.types import PeerChannel, InputPhoneContact
+from telethon import functions
 from telethon.errors.rpcerrorlist import UserNotMutualContactError, ChatWriteForbiddenError
 from telethon import utils
 
@@ -46,7 +46,7 @@ def thread_async(func):
 @thread_async
 async def io_test(a):
     result = await asyncio.gather(io_func(), io_func(), io_func())
-    print(result)
+    print(result, a)
     TLog(
         message_type='send_channel',
         message_content='测试一下client模块写入日志',
@@ -214,7 +214,7 @@ async def input_contacts_request(client, username_list):
         last_name="abc"
     )
 
-    result = await client.invoke(ImportContactsRequest([contact], replace=True))
+    result = await client.invoke(ImportContactsRequest([contact]))
     print(result)
 
 

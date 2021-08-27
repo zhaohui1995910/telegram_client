@@ -45,6 +45,7 @@ class TLog(Base):
             db.session.add(self)
             db.session.commit()
         except Exception as e:
+            print(e)
             db.session.rallback()
 
 

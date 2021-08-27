@@ -5,10 +5,8 @@
 # @Software: PyCharm
 import re
 import time
-import asyncio
 from datetime import datetime
 
-import tornado.log
 from flask import request
 from sqlalchemy import desc
 from sqlalchemy.sql.expression import func
@@ -30,7 +28,7 @@ def test_func():
 
     print('2', client_map)
 
-    user_list = db.session.query(Collectionfriend).filter(
+    db.session.query(Collectionfriend).filter(
         Collectionfriend.create_id == int(1)
     ).order_by(
         func.rand()
