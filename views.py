@@ -72,7 +72,7 @@ def login():
     ).first()
 
     if not user_info:
-        return {'code': 200, 'msg': '没有找到用户信息', 'data': None}
+        return {'code': 201, 'msg': '账号未找到或未激活', 'data': None}
 
     result_data = {
         'package_device_num': user_info.package_device_num,
