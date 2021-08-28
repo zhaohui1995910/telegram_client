@@ -206,9 +206,6 @@ async def channel_add_user(client, channel_url, user_list, phone='', user_id='')
     # 1.1 添加用户
     add_user_result = await asyncio.gather(*tasks)
 
-    print('1', add_user_result)
-    time.sleep(3)
-
     username_list = [u.username for u in user_list]
     TLog(
         message_type='channel_add_user',
@@ -219,7 +216,7 @@ async def channel_add_user(client, channel_url, user_list, phone='', user_id='')
     ).save()
     # 2 获取群对象
     try:
-        channel = await client.get_entity(channel_url)
+        channel = asyncio.run(client.get_entity(channel_url))
     except Exception as e:
         TLog(
             message_type='channel_add_user',
@@ -233,13 +230,11 @@ async def channel_add_user(client, channel_url, user_list, phone='', user_id='')
     user_obj_list = [InputUser(int(u.groupmember_id), int(u.access_hash)) for u in user_list]
     # 4 添加用户到群组
     try:
-        channel_result = client(functions.channels.InviteToChannelRequest(
+        channel_result = await client(functions.channels.InviteToChannelRequest(
             channel=channel,
             users=user_obj_list
         ))
 
-        time.sleep(3)
-        print('2', channel_result)
         TLog(
             message_type='InviteToChannelRequestSuccess',
             message_content=str(username_list),
@@ -279,19 +274,14 @@ async def channel_add_user(client, channel_url, user_list, phone='', user_id='')
         try:
             # await del_user(client, username_list)
 
-            delete_result = client(DeleteContactsRequest(
-                id=username_list,
-            ))
-
-            print('3', delete_result)
-
-            TLog(
-                message_type='delete_user_success',
-                message_content=str(username_list),
-                client_phone=phone,
-                create_time=datetime.now(),
-                create_id=user_id,
-            ).save()
+            # TLog(
+            #     message_type='delete_user_success',
+            #     message_content=str(username_list),
+            #     client_phone=phone,
+            #     create_time=datetime.now(),
+            #     create_id=user_id,
+            # ).save()
+            pass
         except Exception as e:
             TLog(
                 message_type='delete_user_failure',

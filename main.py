@@ -19,7 +19,7 @@ class Config:
     config_env = os.environ.get('SPIDER_WEB_ENV', 'dev').lower()
     # 设置连接数据库的URL
     # app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://%s:%s@%s:31306/%s?charset=utf8mb4' % (
-    #     'officialwebsite', 'Kf8EfwMFxEbDmeL6', '47.241.211.163', 'officialwebsite')
+    #     'officialwebsite', 'Kf8EfwMFxEbDmeL6', '127.0.0.1', 'officialwebsite')
 
     app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://%s:%s@%s:3306/%s?charset=utf8mb4' % (
         'root', '123456', '192.168.1.100', 'test')

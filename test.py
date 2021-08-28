@@ -18,11 +18,11 @@ from telethon.tl.functions.contacts import ImportContactsRequest, AddContactRequ
 api_id = 7053776
 api_hash = '2cc9a6b6d6bf191118813fc41fd74f7c'
 
-client = TelegramClient('test', api_id, api_hash)
+client = TelegramClient('session/test', api_id, api_hash)
 client.start()
 
 
-# loop = asyncio.get_event_loop()
+loop = asyncio.get_event_loop()
 
 
 async def main():
@@ -237,20 +237,20 @@ async def add_channel():
 
 # client.send_file()
 
-# u = client.get_entity('zSL2C4p')
-# print(u)
-
-result = client(AddContactRequest(
-    id='zSL2C4p',
-    first_name='🐜',
-    last_name='',
-
-    phone='some string here',
-    add_phone_privacy_exception=True
-
-))
-
-print(result.stringify())
+u = client.get_entity('@edeedeede')
+print(u)
+#
+# result = client(AddContactRequest(
+#     id=u.id,
+#     first_name=u.first_name if u.first_name else '',
+#     last_name=u.last_name if u.last_name else '',
+#
+#     phone='some string here',
+#     add_phone_privacy_exception=True
+#
+# ))
+#
+# print(result.stringify())
 
 
 # result = client(DeleteContactsRequest(
@@ -258,3 +258,12 @@ print(result.stringify())
 # ))
 # #
 # print(result.stringify())
+channel = client.get_entity('https://t.me/chenjiahaotest')
+
+# user = InputUser(u.id, u.access_hash)
+# print(u.id, u.access_hash)
+
+client(functions.channels.InviteToChannelRequest(
+    channel=channel,
+    users=[u]
+))

@@ -11,6 +11,9 @@ from datetime import datetime
 from flask import request, current_app
 from sqlalchemy import desc
 from sqlalchemy.sql.expression import func
+from telethon.tl.types import InputUser
+from telethon.tl.functions.contacts import DeleteContactsRequest
+from telethon import functions
 
 from main import app, db, loop, thread_pool
 from model import *
@@ -20,7 +23,7 @@ client_count = {}
 client_map = {}
 
 
-@app.route('/test')
+@app.route('/test', methods=['POST', 'GET'])
 def test_func():
     print(current_app.config.get('CRAWL_USER_MAXCOUNT'))
 
@@ -52,8 +55,8 @@ def index():
 
 @app.route('/login', methods=['POST'])
 def login():
-    username = request.form.get("username")
-    password = request.form.get("password")
+    username = request.json.get("username")
+    password = request.json.get("password")
 
     user = db.session.query(TMember).filter(
         TMember.username == username
@@ -85,13 +88,13 @@ def login():
         return {'code': 200, 'msg': '没有找到该用户', 'data': result_data}
 
 
-@app.route('/sign_in')
+@app.route('/sign_in', methods=['POST'])
 def sign_in():
     """添加用户"""
-    _member_id = request.args.get("member_id")
-    _phone = request.args.get("phone")
-    _api_id = request.args.get("api_key")
-    _api_hash = request.args.get("api_hash")
+    _member_id = request.json.get("member_id")
+    _phone = request.json.get("phone")
+    _api_id = request.json.get("api_key")
+    _api_hash = request.json.get("api_hash")
 
     item = db.session.query(TMemberInfo).filter(
         TMemberInfo.member_id == _member_id
@@ -144,13 +147,13 @@ def sign_in():
     }
 
 
-@app.route('/sendCode')
+@app.route('/sendCode', methods=["POST"])
 def send_code():
     """发送验证码认证"""
-    _phone = request.args.get("phone")
-    code = request.args.get("code")
+    phone = request.json.get("phone")
+    code = request.json.get("code")
 
-    _client = client_map.get(_phone)
+    _client = client_map.get(phone)
     if _client is not None:
         loop.run_until_complete(client.send_code(_client, code))
 
@@ -214,7 +217,7 @@ def spider_group_user():
     # 删除username为空的用户
     crawl_user_list = [user for user in crawl_user_list if user.username]
 
-    for u in crawl_user_list[:crawl_user_maxcount]:
+    for u in crawl_user_list:
 
         if u.id in user_id_list:
             continue
@@ -354,10 +357,10 @@ def get_group():
 @app.route("/buli/channel/addusers", methods=['POST'])
 def buli_channel_add_user():
     """批量加群"""
-    _phone = request.form.get("phone")
-    _channel_count = request.form.get("channel_count")
-    _user_count = request.form.get("user_count")
-    _user_id = request.form.get("user_id")
+    _phone = request.json.get("phone")
+    _channel_count = request.json.get("channel_count")
+    _user_count = request.json.get("user_count")
+    _user_id = request.json.get("user_id")
     _client = client_map[_phone]
 
     channel_list = db.session.query(Collectiongroup).filter(
@@ -388,41 +391,61 @@ def buli_channel_add_user():
 @app.route("/channel/addusers", methods=['POST'])
 def channel_add_user():
     """指定拉群：将群组添加随机用户"""
-    _phone = request.args.get("phone")
+    phone = request.form.get("phone")
     channel_url = request.form.get("channel_url")
-    _user_count = request.form.get("user_count")
-    _user_id = request.form.get("user_id")
-    _client = client_map[_phone]
+    user_count = request.form.get("user_count")
+    user_id = request.form.get("user_id")
+    _client = client_map[phone]
 
     # 获取随机用户
     user_list = db.session.query(Collectionfriend).filter(
-        Collectionfriend.create_id == int(_user_id)
+        Collectionfriend.create_id == int(user_id)
     ).order_by(
         func.rand()
-    ).limit(int(_user_count)).all()
+    ).limit(int(user_count)).all()
 
-    print('user_list_len', len(user_list))
+    # 异步，加入群组
+    # thread_pool.submit(
+    #     client.channel_add_user,
+    #     _client,
+    #     channel_url,
+    #     user_list,
+    #     phone,
+    #     user_id,
+    # )
 
-    # 加入群组
-    thread_pool.submit(
-        client.channel_add_user,
-        _client,
-        channel_url,
-        user_list,
-        _phone,
-        _user_id,
-    )
+    # 同步阻塞
+    for u in user_list:
+        asyncio.run(client.add_user(
+            _client,
+            u.username,
+            u.first_name,
+            u.last_name
+        ))
 
-    return {'code': 200, 'msg': 'success', 'data': '后台正在处理，请查看日志'}
+    channel = asyncio.run(_client.get_entity(channel_url))
+
+    user_obj_list = [InputUser(int(u.groupmember_id), int(u.access_hash)) for u in user_list]
+    # 4 添加用户到群组
+    asyncio.run(_client(functions.channels.InviteToChannelRequest(
+        channel=channel,
+        users=user_obj_list
+    )))
+
+    _client(DeleteContactsRequest(
+        id=user_obj_list,
+    ))
+
+    return {'code': 200, 'msg': 'success', 'data': ''}
 
 
 @app.route("/send/users", methods=['POST'])
 def buli_send_to_user():
-    user_count = request.form.get('user_count')
-    user_id = request.form.get('user_id')
-    file_name = request.form.get('file_name')
-    message = request.form.get('message')
-    phone = request.args.get("phone")
+    user_count = request.json.get('user_count')
+    user_id = request.json.get('user_id')
+    file_name = request.json.get('file_name')
+    message = request.json.get('message')
+    phone = request.json.get("phone")
 
     user_count = int(user_count)
     if user_count > current_app.config.get('SEDN_USER_LIMIT'):
@@ -486,11 +509,11 @@ def buli_send_to_user():
 
 @app.route("/send/channel", methods=['POST'])
 def buli_send_to_channel():
-    channel_count = request.form.get('channel_count')
-    user_id = request.form.get('user_id')
-    file_name = request.form.get('file_name')
-    message = request.form.get('message')
-    phone = request.args.get("phone")
+    channel_count = request.json.get('channel_count')
+    user_id = request.json.get('user_id')
+    file_name = request.json.get('file_name')
+    message = request.json.get('message')
+    phone = request.json.get("phone")
     _client = client_map[phone]
 
     channel_count = int(channel_count)
@@ -575,7 +598,9 @@ def get_logs():
     return {'code': 200, 'msg': 'success', 'data': result}
 
 
+@app.route("/add/user", methods=['GET'])
 def add_random_user():
+    """添加用户"""
     _phone = request.args.get("phone")
     _user_count = request.form.get("user_count")
     _user_id = request.form.get("user_id")
@@ -593,6 +618,5 @@ def add_random_user():
     ]
 
     result = asyncio.gather(tasks)
-    print(result)
 
-    return {'code': 200, 'msg': 'success', 'data': '添加成功'}
+    return {'code': 200, 'msg': 'success', 'data': result}
