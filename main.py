@@ -1,9 +1,7 @@
 # coding: utf-8
-import logging
 import asyncio
 import os
 from concurrent.futures import ThreadPoolExecutor
-from logging.handlers import TimedRotatingFileHandler
 
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
@@ -20,8 +18,11 @@ class Config:
     """配置参数"""
     config_env = os.environ.get('SPIDER_WEB_ENV', 'dev').lower()
     # 设置连接数据库的URL
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://%s:%s@%s:31306/%s' % (
-        'officialwebsite', 'Kf8EfwMFxEbDmeL6', '47.241.211.163', 'officialwebsite')
+    # app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://%s:%s@%s:31306/%s?charset=utf8mb4' % (
+    #     'officialwebsite', 'Kf8EfwMFxEbDmeL6', '47.241.211.163', 'officialwebsite')
+
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://%s:%s@%s:3306/%s?charset=utf8mb4' % (
+        'root', '123456', '192.168.1.100', 'test')
 
     # 设置sqlalchemy自动更跟踪数据库
     SQLALCHEMY_TRACK_MODIFICATIONS = True
@@ -50,5 +51,5 @@ from views import *
 
 if __name__ == '__main__':
     http_server = HTTPServer(WSGIContainer(app))
-    http_server.listen(8800, address='0.0.0.0')  # flask默认的端口
+    http_server.listen(8000, address='0.0.0.0')  # flask默认的端口
     IOLoop.current().start()

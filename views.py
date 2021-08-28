@@ -5,6 +5,7 @@
 # @Software: PyCharm
 import re
 import time
+import asyncio
 from datetime import datetime
 
 from flask import request, current_app
@@ -38,7 +39,7 @@ def test_func():
     # loop.run_until_complete(client.io_test(a))
 
     # 异步
-    result = thread_pool.submit(client.io_test, a)
+    result = thread_pool.submit(client.io_test, *(a, 1,))
     print(result)
 
     return 'views'
@@ -72,7 +73,7 @@ def login():
 
     result_data = {
         'package_device_num': user_info.package_device_num,
-        'current_count'     : current_count
+        'current_count': current_count
     }
 
     if user:
@@ -84,8 +85,8 @@ def login():
         return {'code': 200, 'msg': '没有找到该用户', 'data': result_data}
 
 
-@app.route('/addUser')
-def add_user():
+@app.route('/sign_in')
+def sign_in():
     """添加用户"""
     _member_id = request.args.get("member_id")
     _phone = request.args.get("phone")
@@ -99,7 +100,7 @@ def add_user():
     if item:
         if client_count.get(_member_id, 0) >= item.package_device_num:
             TLog(
-                message_type='add_user',
+                message_type='sign_in',
                 message_content='以到最大可登陆设备数',
                 client_phone=_phone,
                 create_time=datetime.now(),
@@ -107,14 +108,14 @@ def add_user():
             ).save()
             return {
                 'code': 200,
-                'msg' : '以到最大可登陆设备数' % _phone,
+                'msg': '以到最大可登陆设备数' % _phone,
                 'data': None
             }
 
     # 需要判断客户端是否已经存在
     if _phone in client_map:
         TLog(
-            message_type='add_user',
+            message_type='sign_in',
             message_content='设备已登陆',
             client_phone=_phone,
             create_time=datetime.now(),
@@ -122,14 +123,14 @@ def add_user():
         ).save()
         return {'code': 200, 'msg': '%s 设别已登陆' % _phone, 'data': None}
 
-    _client, status = loop.run_until_complete(client.add_user(_phone, _api_id, _api_hash))
+    _client, status = loop.run_until_complete(client.sign_in(_phone, _api_id, _api_hash))
 
     if _client:
         client_map[_phone] = _client
         client_count[_member_id] = client_count.get(_member_id, 0) + 1
 
         TLog(
-            message_type='add_user',
+            message_type='sign_in',
             message_content='添加设备',
             client_phone=_phone,
             create_time=datetime.now(),
@@ -138,7 +139,7 @@ def add_user():
 
     return {
         'code': 200,
-        'msg' : 'success',
+        'msg': 'success',
         'data': {'status': status}
     }
 
@@ -209,15 +210,20 @@ def spider_group_user():
     user_id_list = [u.groupmember_id for u in user_list]
 
     crawl_user_maxcount = current_app.config.get('CRAWL_USER_MAXCOUNT')
+
+    # 删除username为空的用户
+    crawl_user_list = [user for user in crawl_user_list if user.username]
+
     for u in crawl_user_list[:crawl_user_maxcount]:
-        if not u.username:
-            continue
 
         if u.id in user_id_list:
             continue
 
         item = Collectionfriend()
         item.username = u.username
+        item.first_name = u.first_name
+        item.last_name = u.last_name
+        item.access_hash = u.access_hash
         item.groupmember_id = u.id
         item.create_id = int(_user_id)
         item.create_time = datetime.now()
@@ -250,7 +256,7 @@ def get_user():
     return_rsult = []
     for i in result:
         item = {
-            'username'     : i.username,
+            'username': i.username,
             'groupmemberid': i.groupmember_id,
         }
         return_rsult.append(item)
@@ -338,36 +344,76 @@ def get_group():
     for i in result:
         item = {
             'group_name': i.group_name,
-            'group_url' : i.group_url,
+            'group_url': i.group_url,
         }
         return_rsult.append(item)
 
     return {'code': 200, 'msg': 'success', 'data': return_rsult}
 
 
-@app.route("/channel/addUsers", methods=['GET'])
-def channel_add_user():
-    _phone = request.args.get("phone")
-    _channel_count = request.args.get("channel_count")
-    _user_count = request.args.get("user_count")
+@app.route("/buli/channel/addusers", methods=['POST'])
+def buli_channel_add_user():
+    """批量加群"""
+    _phone = request.form.get("phone")
+    _channel_count = request.form.get("channel_count")
+    _user_count = request.form.get("user_count")
+    _user_id = request.form.get("user_id")
     _client = client_map[_phone]
 
-    channel_url_list = [
-        # 'https://t.me/yinyuedareguan',
-        'https://t.me/paofen55',
-        # 'https://t.me/courenao',
-    ]
+    channel_list = db.session.query(Collectiongroup).filter(
+        Collectiongroup.create_id == int(_user_id)
+    ).order_by(
+        func.rand()
+    ).limit(int(_channel_count)).all()
 
-    username_list = [
-        # '@chengjiahao',
-        '@cjiahao',
-    ]
+    for channel in channel_list:
+        user_list = db.session.query(Collectionfriend).filter(
+            Collectionfriend.create_id == int(_user_id)
+        ).order_by(
+            func.rand()
+        ).limit(int(_user_count)).all()
 
-    for channel_url in channel_url_list:
-        loop.run_until_complete(
-            client.channel_add_user(_client, channel_url, username_list)
+        thread_pool.submit(
+            client.channel_add_user,
+            _client,
+            channel.group_url,
+            user_list,
+            _phone,
+            _user_id,
         )
-    return {'code': 200, 'msg': 'success', 'data': None}
+
+    return {'code': 200, 'msg': 'success', 'data': '后台正在处理，请查看日志'}
+
+
+@app.route("/channel/addusers", methods=['POST'])
+def channel_add_user():
+    """指定拉群：将群组添加随机用户"""
+    _phone = request.args.get("phone")
+    channel_url = request.form.get("channel_url")
+    _user_count = request.form.get("user_count")
+    _user_id = request.form.get("user_id")
+    _client = client_map[_phone]
+
+    # 获取随机用户
+    user_list = db.session.query(Collectionfriend).filter(
+        Collectionfriend.create_id == int(_user_id)
+    ).order_by(
+        func.rand()
+    ).limit(int(_user_count)).all()
+
+    print('user_list_len', len(user_list))
+
+    # 加入群组
+    thread_pool.submit(
+        client.channel_add_user,
+        _client,
+        channel_url,
+        user_list,
+        _phone,
+        _user_id,
+    )
+
+    return {'code': 200, 'msg': 'success', 'data': '后台正在处理，请查看日志'}
 
 
 @app.route("/send/users", methods=['POST'])
@@ -519,11 +565,34 @@ def get_logs():
         int(page) - 1).all()
 
     result = [{
-        'create_id'      : r.create_id,
-        'client_phone'   : r.client_phone,
-        'message_type'   : r.message_type,
+        'create_id': r.create_id,
+        'client_phone': r.client_phone,
+        'message_type': r.message_type,
         'message_content': r.message_content,
-        'create_time'    : r.create_time,
+        'create_time': r.create_time,
     } for r in item_list]
 
     return {'code': 200, 'msg': 'success', 'data': result}
+
+
+def add_random_user():
+    _phone = request.args.get("phone")
+    _user_count = request.form.get("user_count")
+    _user_id = request.form.get("user_id")
+    _client = client_map[_phone]
+
+    user_list = db.session.query(Collectionfriend).filter(
+        Collectionfriend.create_id == int(_user_id)
+    ).order_by(
+        func.rand()
+    ).limit(int(_user_count)).all()
+
+    tasks = [
+        client.add_user(_client, u.username, u.first_name, u.last_name)
+        for u in user_list
+    ]
+
+    result = asyncio.gather(tasks)
+    print(result)
+
+    return {'code': 200, 'msg': 'success', 'data': '添加成功'}

@@ -8,7 +8,7 @@ from telethon.tl.functions.messages import CheckChatInviteRequest, AddChatUserRe
 from telethon import utils
 from telethon import functions, types
 from telethon.tl.types import InputChannel, InputUser, InputPhoneContact
-from telethon.tl.functions.contacts import ImportContactsRequest
+from telethon.tl.functions.contacts import ImportContactsRequest, AddContactRequest, DeleteContactsRequest
 
 # import asyncio
 
@@ -193,12 +193,12 @@ async def add_channel():
 # print(result)
 
 # channel = client.get_entity('https://t.me/pppfffs')
-channel = client.get_entity('https://t.me/paofen55')
-print('---channel---', channel)
+# channel = client.get_entity('https://t.me/paofen55')
+# print('---channel---', channel)
 # user1 = client.get_entity('@chengjiahao')
 # print(user1)
-user2 = client.get_entity('@cjiahao')
-print(user2)
+# user2 = client.get_entity('@cjiahao')
+# print(user2)
 
 # result = client(functions.channels.InviteToChannelRequest(
 #     channel,
@@ -237,13 +237,24 @@ print(user2)
 
 # client.send_file()
 
-u = client.get_entity('@cjiahao')
-print('1111', u)
+# u = client.get_entity('zSL2C4p')
+# print(u)
 
-# contact = InputPhoneContact(client_id=0, phone='+8615397589208', first_name="陈", last_name='家豪')
-contact = InputPhoneContact(client_id=0, phone='', first_name="陈", last_name='家豪')
+result = client(AddContactRequest(
+    id='zSL2C4p',
+    first_name='🐜',
+    last_name='',
 
-result = client(ImportContactsRequest([contact]))
+    phone='some string here',
+    add_phone_privacy_exception=True
 
-me = client.get_me()
-print(me)
+))
+
+print(result.stringify())
+
+
+# result = client(DeleteContactsRequest(
+#     id=['zSL2C4p'],
+# ))
+# #
+# print(result.stringify())

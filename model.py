@@ -17,6 +17,9 @@ class Collectionfriend(Base):
     groupmember_id = Column(Integer)
     create_id = Column(Integer)
     create_time = Column(DateTime)
+    first_name = Column(String(255))
+    last_name = Column(String(255))
+    access_hash = Column(String(255))
 
 
 class Collectiongroup(Base):

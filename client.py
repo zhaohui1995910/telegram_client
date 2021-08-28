@@ -5,18 +5,17 @@ import time
 from datetime import datetime
 
 import nest_asyncio
-
-nest_asyncio.apply()
-
 from telethon import TelegramClient
-from telethon.tl.functions.contacts import ImportContactsRequest
-from telethon.tl.types import PeerChannel, InputPhoneContact
+from telethon.tl.functions.contacts import ImportContactsRequest, AddContactRequest, DeleteContactsRequest
+from telethon.tl.types import PeerChannel, InputPhoneContact, InputUser
 from telethon import functions
 from telethon.errors.rpcerrorlist import UserNotMutualContactError, ChatWriteForbiddenError
 from telethon import utils
 
 from main import loop
 from model import TLog
+
+nest_asyncio.apply()
 
 
 def thread_async(func):
@@ -30,12 +29,12 @@ def thread_async(func):
 
         # 方案一
         asyncio.set_event_loop(loop)
-        result = asyncio.run(func(args))
+        result = asyncio.run(func(*args))
 
         # 方案二
         # _loop = asyncio.new_event_loop()
         # asyncio.set_event_loop(_loop)
-        # func_rsult = _loop.run_until_complete(func(_loop, *args))  # 需要在func函数loop参数，接收新的loop
+        # result = _loop.run_until_complete(func(_loop, *args))  # 需要在func函数loop参数，接收新的loop
         # _loop.close()
 
         return result
@@ -44,7 +43,7 @@ def thread_async(func):
 
 
 @thread_async
-async def io_test(a):
+async def io_test(a, b):
     result = await asyncio.gather(io_func(), io_func(), io_func())
     print(result, a)
     TLog(
@@ -102,7 +101,7 @@ async def resolve_id(_id):
     print(peer)  # PeerChannel(channel_id=456)
 
 
-async def add_user(phone, _id, _hash):
+async def sign_in(phone, _id, _hash):
     _client = TelegramClient('session/' + phone, int(_id), _hash)
 
     await _client.connect()
@@ -112,8 +111,34 @@ async def add_user(phone, _id, _hash):
     if not status:
         await _client.sign_in(phone)
 
-    status_str = '正在发送验证码' if status else '已在登录状态'
+    status_str = '已在登录状态' if status else '正在发送验证码'
     return _client, status_str
+
+
+async def add_user(client, username, first_name, last_name):
+    """添加联系人"""
+    try:
+        print('add user %s' % username)
+        result = await client(AddContactRequest(
+            id=username if username else '',
+            first_name=first_name if first_name else '',
+            last_name=last_name if last_name else '',
+            phone='some string here',
+            add_phone_privacy_exception=True
+        ))
+        return '添加成功'
+    except Exception as e:
+        print(e)
+        return '添加失败'
+
+
+async def del_user(client, username_list):
+    """删除用户"""
+    result = await client(DeleteContactsRequest(
+        id=username_list,
+    ))
+
+    return result
 
 
 async def send_code(client, code):
@@ -161,45 +186,120 @@ async def spider_group_url(client):
     return result
 
 
-async def channel_add_user(client, channel_url, user_list):
+@thread_async
+async def channel_add_user(client, channel_url, user_list, phone='', user_id=''):
     """
     批量将用户加入群组
+    :param phone:
     :param client:
     :param channel_url: 群组的URL地址
-    :param user_list: 用户名（username）列表
+    :param user_list: [Collectionfriend]
+    :param phone: 用户手机号
+    :param user_id: 用户id
     :return:
     """
-    print('---client---', client)
 
     # 1 获取user对象
-    users = []
-    for username in user_list:
-        user = await client.get_entity(username)
-        users.append(user)
+    tasks = [add_user(
+        client, u.username, u.first_name, u.last_name
+    ) for u in user_list]
+    # 1.1 添加用户
+    add_user_result = await asyncio.gather(*tasks)
 
+    print('1', add_user_result)
+    time.sleep(3)
+
+    username_list = [u.username for u in user_list]
+    TLog(
+        message_type='channel_add_user',
+        message_content=str(list(zip(username_list, add_user_result))),
+        client_phone=phone,
+        create_time=datetime.now(),
+        create_id=user_id,
+    ).save()
     # 2 获取群对象
-    channel = await client.get_entity(channel_url)
-    print('---channel---', channel)
-
     try:
-        result = await client(functions.channels.InviteToChannelRequest(
-            channel=channel,
-            users=users
-        ))
-    except UserNotMutualContactError:
-        print('此用户不是好友')
-        pass
-
-    except ChatWriteForbiddenError:
-        print('此用不不能添加到群组')
-        pass
-
+        channel = await client.get_entity(channel_url)
     except Exception as e:
-        print(e)
-        pass
+        TLog(
+            message_type='channel_add_user',
+            message_content='未找到群组: %s Exception: %s' % (channel_url, str(e)),
+            client_phone=phone,
+            create_time=datetime.now(),
+            create_id=user_id,
+        ).save()
+        return '没有找到群组'
+    # 3 构建用户对象
+    user_obj_list = [InputUser(int(u.groupmember_id), int(u.access_hash)) for u in user_list]
+    # 4 添加用户到群组
+    try:
+        channel_result = client(functions.channels.InviteToChannelRequest(
+            channel=channel,
+            users=user_obj_list
+        ))
 
+        time.sleep(3)
+        print('2', channel_result)
+        TLog(
+            message_type='InviteToChannelRequestSuccess',
+            message_content=str(username_list),
+            client_phone=phone,
+            create_time=datetime.now(),
+            create_id=user_id,
+        ).save()
+    except UserNotMutualContactError as e:
+        TLog(
+            message_type='InviteToChannelRequestExcept',
+            message_content=str(e),
+            client_phone=phone,
+            create_time=datetime.now(),
+            create_id=user_id,
+        ).save()
+        pass
+    except ChatWriteForbiddenError as e:
+        TLog(
+            message_type='InviteToChannelRequestExcept',
+            message_content=str(e),
+            client_phone=phone,
+            create_time=datetime.now(),
+            create_id=user_id,
+        ).save()
+        pass
+    except Exception as e:
+        TLog(
+            message_type='InviteToChannelRequestExcept',
+            message_content=str(e),
+            client_phone=phone,
+            create_time=datetime.now(),
+            create_id=user_id,
+        ).save()
+        pass
     else:
-        return result
+        # 删除用户
+        try:
+            # await del_user(client, username_list)
+
+            delete_result = client(DeleteContactsRequest(
+                id=username_list,
+            ))
+
+            print('3', delete_result)
+
+            TLog(
+                message_type='delete_user_success',
+                message_content=str(username_list),
+                client_phone=phone,
+                create_time=datetime.now(),
+                create_id=user_id,
+            ).save()
+        except Exception as e:
+            TLog(
+                message_type='delete_user_failure',
+                message_content=str(e),
+                client_phone=phone,
+                create_time=datetime.now(),
+                create_id=user_id,
+            ).save()
 
 
 async def input_contacts_request(client, username_list):
@@ -318,13 +418,49 @@ async def async_send_user_msg(client, filename, message, username_list, user_id,
 
 @thread_async
 async def async_send_channel_msg(client, filename, message, channel_url_list, user_id, phone):
-    result = await send_channel_message_gather(
-        client,
-        filename,
-        message,
-        channel_url_list,
-        user_id,
-        phone
-    )
+    try:
+        print('async_send_channel_msg')
+        result = asyncio.gather(send_channel_message_gather(
+            client,
+            filename,
+            message,
+            channel_url_list,
+            user_id,
+            phone
+        ))
+        # result = await send_channel_message_gather(
+        #     client,
+        #     filename,
+        #     message,
+        #     channel_url_list,
+        #     user_id,
+        #     phone
+        # )
+        return result
+    except Exception as e:
+        print(e)
 
-    return result
+
+async def invite_to_channel(client, channel_url, user_list):
+    """
+    群组添加用户
+    :param client:
+    :param channel_url:
+    :param user_list:
+    :return:
+    """
+
+    channel = await client.get_entity(channel_url)
+
+    user_obj_list = [InputUser(int(u.groupmember_id), int(u.access_hash)) for u in user_list]
+
+    channel_result = await client(functions.channels.InviteToChannelRequest(
+        channel=channel,
+        users=user_obj_list
+    ))
+
+
+async def delete_user(client, username_list):
+    delete_result = await client(DeleteContactsRequest(
+        id=username_list,
+    ))
