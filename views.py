@@ -75,6 +75,8 @@ def login():
         return {'code': 201, 'msg': '账号未找到或未激活', 'data': None}
 
     result_data = {
+        'user_id': user.id,
+        'user_name': user.username,
         'package_device_num': user_info.package_device_num,
         'current_count': current_count
     }
@@ -254,7 +256,7 @@ def get_user():
 
     result = db.session.query(Collectionfriend).filter(
         Collectionfriend.create_id == int(user_id)
-    ).limit(int(page_size)).offset((page - 1) * int(page_size)).all()
+    ).limit(int(page_size)).offset((int(page) - 1) * int(page_size)).all()
 
     return_rsult = []
     for i in result:
@@ -416,18 +418,18 @@ def channel_add_user():
 
     # 同步阻塞
     for u in user_list:
-        asyncio.run(client.add_user(
+        loop.run_until_complete(client.add_user(
             _client,
             u.username,
             u.first_name,
             u.last_name
         ))
 
-    channel = asyncio.run(_client.get_entity(channel_url))
+    channel = loop.run_until_complete(_client.get_entity(channel_url))
 
     user_obj_list = [InputUser(int(u.groupmember_id), int(u.access_hash)) for u in user_list]
     # 4 添加用户到群组
-    asyncio.run(_client(functions.channels.InviteToChannelRequest(
+    loop.run_until_complete(_client(functions.channels.InviteToChannelRequest(
         channel=channel,
         users=user_obj_list
     )))
@@ -620,3 +622,12 @@ def add_random_user():
     result = asyncio.gather(tasks)
 
     return {'code': 200, 'msg': 'success', 'data': result}
+
+
+@app.route("/add/user", methods=['POST'])
+def logout():
+    phone = request.json.get("phone")
+
+    _client = client_map[phone]
+
+    pass

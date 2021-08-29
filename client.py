@@ -325,7 +325,7 @@ async def send_user_message_gather(client, filename, message, username_list, use
     result = await asyncio.gather(*tasks, loop=loop)
 
     TLog(
-        message_type='send_channel',
+        message_type='send_user',
         message_content=str(list(zip(username_list, result))),
         client_phone=phone,
         create_time=datetime.now(),
@@ -410,14 +410,14 @@ async def async_send_user_msg(client, filename, message, username_list, user_id,
 async def async_send_channel_msg(client, filename, message, channel_url_list, user_id, phone):
     try:
         print('async_send_channel_msg')
-        result = asyncio.gather(send_channel_message_gather(
+        result = await send_channel_message_gather(
             client,
             filename,
             message,
             channel_url_list,
             user_id,
             phone
-        ))
+        )
         # result = await send_channel_message_gather(
         #     client,
         #     filename,
