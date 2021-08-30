@@ -12,7 +12,7 @@ from flask import request, current_app
 from sqlalchemy import desc
 from sqlalchemy.sql.expression import func
 from telethon.tl.types import InputUser
-from telethon.tl.functions.contacts import DeleteContactsRequest
+from telethon.tl.functions.contacts import DeleteContactsRequest, GetContactsRequest
 from telethon import functions
 
 from main import app, db, loop, thread_pool
@@ -24,17 +24,17 @@ client_map = {}
 
 
 @app.route('/test', methods=['POST', 'GET'])
-def test_func():
+def test_view():
     print(current_app.config.get('CRAWL_USER_MAXCOUNT'))
 
     a = request.args.get('kw')
     client_map[a] = a
 
-    db.session.query(Collectionfriend).filter(
-        Collectionfriend.create_id == int(1)
-    ).order_by(
-        func.rand()
-    ).limit(10).all()
+    # db.session.query(Collectionfriend).filter(
+    #     Collectionfriend.create_id == int(1)
+    # ).order_by(
+    #     func.rand()
+    # ).limit(10).all()
     #
     # user_list = [u.username for u in user_list]
     # app_log.info('记录日志views测试')
@@ -42,8 +42,10 @@ def test_func():
     # loop.run_until_complete(client.io_test(a))
 
     # 异步
-    result = thread_pool.submit(client.io_test, *(a, 1,))
-    print(result)
+    # result = thread_pool.submit(client.io_test, *(a, 1,))
+
+    result = asyncio.run(asyncio.gather(client.io_func1()))
+    print('result', result)
 
     return 'views'
 
@@ -59,11 +61,12 @@ def login():
     password = request.json.get("password")
 
     user = db.session.query(TMember).filter(
-        TMember.username == username
+        TMember.username == username,
+        TMember.pwd == password
     ).first()
 
     if not user:
-        return {'code': 200, 'msg': '没有找到用户', 'data': None}
+        return {'code': 200, 'msg': '请检查用户名和密码是否正确', 'data': None}
 
     current_count = client_count.get(user.id, 0)
 
@@ -75,10 +78,10 @@ def login():
         return {'code': 201, 'msg': '账号未找到或未激活', 'data': None}
 
     result_data = {
-        'user_id': user.id,
-        'user_name': user.username,
+        'user_name'         : user.username,
+        'user_id'           : user.id,
         'package_device_num': user_info.package_device_num,
-        'current_count': current_count
+        'current_count'     : current_count
     }
 
     if user:
@@ -113,7 +116,7 @@ def sign_in():
             ).save()
             return {
                 'code': 200,
-                'msg': '以到最大可登陆设备数' % _phone,
+                'msg' : '以到最大可登陆设备数' % _phone,
                 'data': None
             }
 
@@ -144,7 +147,7 @@ def sign_in():
 
     return {
         'code': 200,
-        'msg': 'success',
+        'msg' : 'success',
         'data': {'status': status}
     }
 
@@ -256,12 +259,12 @@ def get_user():
 
     result = db.session.query(Collectionfriend).filter(
         Collectionfriend.create_id == int(user_id)
-    ).limit(int(page_size)).offset((int(page) - 1) * int(page_size)).all()
+    ).limit(int(page_size)).offset((page - 1) * int(page_size)).all()
 
     return_rsult = []
     for i in result:
         item = {
-            'username': i.username,
+            'username'     : i.username,
             'groupmemberid': i.groupmember_id,
         }
         return_rsult.append(item)
@@ -349,7 +352,7 @@ def get_group():
     for i in result:
         item = {
             'group_name': i.group_name,
-            'group_url': i.group_url,
+            'group_url' : i.group_url,
         }
         return_rsult.append(item)
 
@@ -418,18 +421,18 @@ def channel_add_user():
 
     # 同步阻塞
     for u in user_list:
-        loop.run_until_complete(client.add_user(
+        asyncio.run(client.add_user(
             _client,
             u.username,
             u.first_name,
             u.last_name
         ))
 
-    channel = loop.run_until_complete(_client.get_entity(channel_url))
+    channel = asyncio.run(_client.get_entity(channel_url))
 
     user_obj_list = [InputUser(int(u.groupmember_id), int(u.access_hash)) for u in user_list]
     # 4 添加用户到群组
-    loop.run_until_complete(_client(functions.channels.InviteToChannelRequest(
+    asyncio.run(_client(functions.channels.InviteToChannelRequest(
         channel=channel,
         users=user_obj_list
     )))
@@ -590,11 +593,11 @@ def get_logs():
         int(page) - 1).all()
 
     result = [{
-        'create_id': r.create_id,
-        'client_phone': r.client_phone,
-        'message_type': r.message_type,
+        'create_id'      : r.create_id,
+        'client_phone'   : r.client_phone,
+        'message_type'   : r.message_type,
         'message_content': r.message_content,
-        'create_time': r.create_time,
+        'create_time'    : r.create_time,
     } for r in item_list]
 
     return {'code': 200, 'msg': 'success', 'data': result}
@@ -619,15 +622,32 @@ def add_random_user():
         for u in user_list
     ]
 
-    result = asyncio.gather(tasks)
+    result = asyncio.run(asyncio.gather(tasks))
 
     return {'code': 200, 'msg': 'success', 'data': result}
 
 
-@app.route("/add/user", methods=['POST'])
+@app.route("/logout", methods=['POST'])
 def logout():
-    phone = request.json.get("phone")
+    phone = request.json.get('phone')
+    _client = client_map[phone]
+    # 退出登录
+    try:
+        asyncio.run(_client.log_out())
+    except Exception as e:
+        return {'code': 200, 'msg': '退出失败', 'data': str(e)}
 
+    client_map.pop(phone)
+    return {'code': 200, 'msg': '退出成功', 'data': ''}
+
+
+@app.route('/get/contacts', methods=['GET'])
+def get_contacts():
+    """获取联系人"""
+    phone = request.args.get('phone')
     _client = client_map[phone]
 
-    pass
+    result = asyncio.run(_client(GetContactsRequest(hash=0)))
+    print(result)
+
+    return {'code': 200, 'msg': '退出成功', 'data': ''}
