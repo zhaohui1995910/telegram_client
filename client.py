@@ -44,21 +44,33 @@ def thread_async(func):
 
 @thread_async
 async def io_test(a, b):
-    result = await asyncio.gather(io_func(), io_func(), io_func())
-    print(result, a)
-    TLog(
-        message_type='send_channel',
-        message_content='测试一下client模块写入日志',
-        client_phone=115456,
-        create_time=datetime.now(),
-        create_id=1,
-    ).save()
+    result1 = await asyncio.gather(io_func1())
+    print(result1)
 
-    return result
+    await io_func3()
+
+    result2 = await asyncio.gather(io_func2())
+    print(result2)
 
 
-async def io_func():
+async def io_func1():
+    print('start io func1')
     time.sleep(5)
+    print('io_func1')
+    return 'ok'
+
+
+async def io_func2():
+    print('start io func2')
+    time.sleep(2)
+    print('io_func2')
+    return 'ok'
+
+
+async def io_func3():
+    print('start io func3')
+    time.sleep(2)
+    print('io_func3')
     return 'ok'
 
 
@@ -134,11 +146,14 @@ async def add_user(client, username, first_name, last_name):
 
 async def del_user(client, username_list):
     """删除用户"""
-    result = await client(DeleteContactsRequest(
-        id=username_list,
-    ))
-
-    return result
+    try:
+        result = await client(DeleteContactsRequest(
+            id=username_list,
+        ))
+        return result
+    except Exception as e:
+        print(e)
+        return '删除失败'
 
 
 async def send_code(client, code):
@@ -216,7 +231,7 @@ async def channel_add_user(client, channel_url, user_list, phone='', user_id='')
     ).save()
     # 2 获取群对象
     try:
-        channel = asyncio.run(client.get_entity(channel_url))
+        channel = await client.get_entity(channel_url)
     except Exception as e:
         TLog(
             message_type='channel_add_user',
@@ -234,6 +249,7 @@ async def channel_add_user(client, channel_url, user_list, phone='', user_id='')
             channel=channel,
             users=user_obj_list
         ))
+        print(channel_result)
 
         TLog(
             message_type='InviteToChannelRequestSuccess',
@@ -269,27 +285,27 @@ async def channel_add_user(client, channel_url, user_list, phone='', user_id='')
             create_id=user_id,
         ).save()
         pass
-    else:
-        # 删除用户
-        try:
-            # await del_user(client, username_list)
-
-            # TLog(
-            #     message_type='delete_user_success',
-            #     message_content=str(username_list),
-            #     client_phone=phone,
-            #     create_time=datetime.now(),
-            #     create_id=user_id,
-            # ).save()
-            pass
-        except Exception as e:
-            TLog(
-                message_type='delete_user_failure',
-                message_content=str(e),
-                client_phone=phone,
-                create_time=datetime.now(),
-                create_id=user_id,
-            ).save()
+    # 删除联系人
+    try:
+        result = await client(DeleteContactsRequest(
+            id=username_list,
+        ))
+        TLog(
+            message_type='delete_user_success',
+            message_content=str(username_list),
+            client_phone=phone,
+            create_time=datetime.now(),
+            create_id=user_id,
+        ).save()
+        return result
+    except Exception as e:
+        TLog(
+            message_type='delete_user_failure',
+            message_content=str(e),
+            client_phone=phone,
+            create_time=datetime.now(),
+            create_id=user_id,
+        ).save()
 
 
 async def input_contacts_request(client, username_list):
@@ -325,7 +341,7 @@ async def send_user_message_gather(client, filename, message, username_list, use
     result = await asyncio.gather(*tasks, loop=loop)
 
     TLog(
-        message_type='send_channel',
+        message_type='send_user',
         message_content=str(list(zip(username_list, result))),
         client_phone=phone,
         create_time=datetime.now(),

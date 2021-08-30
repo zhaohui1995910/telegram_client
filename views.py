@@ -24,17 +24,17 @@ client_map = {}
 
 
 @app.route('/test', methods=['POST', 'GET'])
-def test_func():
+def test_view():
     print(current_app.config.get('CRAWL_USER_MAXCOUNT'))
 
     a = request.args.get('kw')
     client_map[a] = a
 
-    db.session.query(Collectionfriend).filter(
-        Collectionfriend.create_id == int(1)
-    ).order_by(
-        func.rand()
-    ).limit(10).all()
+    # db.session.query(Collectionfriend).filter(
+    #     Collectionfriend.create_id == int(1)
+    # ).order_by(
+    #     func.rand()
+    # ).limit(10).all()
     #
     # user_list = [u.username for u in user_list]
     # app_log.info('记录日志views测试')
@@ -43,7 +43,6 @@ def test_func():
 
     # 异步
     result = thread_pool.submit(client.io_test, *(a, 1,))
-    print(result)
 
     return 'views'
 
