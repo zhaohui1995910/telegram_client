@@ -55,21 +55,22 @@ async def io_test(a, b):
 
 async def io_func1():
     print('start io func1')
-    time.sleep(5)
+    # time.sleep(5)
+    await asyncio.sleep(5)
     print('io_func1')
     return 'ok'
 
 
 async def io_func2():
     print('start io func2')
-    time.sleep(2)
+    await asyncio.sleep(2)
     print('io_func2')
     return 'ok'
 
 
 async def io_func3():
     print('start io func3')
-    time.sleep(2)
+    await asyncio.sleep(2)
     print('io_func3')
     return 'ok'
 
@@ -114,7 +115,7 @@ async def resolve_id(_id):
 
 
 async def sign_in(phone, _id, _hash):
-    _client = TelegramClient('session/' + phone, int(_id), _hash)
+    _client = TelegramClient('session/' + phone, int(_id), _hash, loop=loop)
 
     await _client.connect()
 
