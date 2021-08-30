@@ -12,7 +12,7 @@ from flask import request, current_app
 from sqlalchemy import desc
 from sqlalchemy.sql.expression import func
 from telethon.tl.types import InputUser
-from telethon.tl.functions.contacts import DeleteContactsRequest
+from telethon.tl.functions.contacts import DeleteContactsRequest, GetContactsRequest
 from telethon import functions
 
 from main import app, db, loop, thread_pool
@@ -42,7 +42,10 @@ def test_view():
     # loop.run_until_complete(client.io_test(a))
 
     # 异步
-    result = thread_pool.submit(client.io_test, *(a, 1,))
+    # result = thread_pool.submit(client.io_test, *(a, 1,))
+
+    result = asyncio.run(asyncio.gather(client.io_func1()))
+    print('result', result)
 
     return 'views'
 
@@ -619,7 +622,7 @@ def add_random_user():
         for u in user_list
     ]
 
-    result = asyncio.gather(tasks)
+    result = asyncio.run(asyncio.gather(tasks))
 
     return {'code': 200, 'msg': 'success', 'data': result}
 
@@ -635,4 +638,16 @@ def logout():
         return {'code': 200, 'msg': '退出失败', 'data': str(e)}
 
     client_map.pop(phone)
+    return {'code': 200, 'msg': '退出成功', 'data': ''}
+
+
+@app.route('/get/contacts', methods=['GET'])
+def get_contacts():
+    """获取联系人"""
+    phone = request.args.get('phone')
+    _client = client_map[phone]
+
+    result = asyncio.run(_client(GetContactsRequest(hash=0)))
+    print(result)
+
     return {'code': 200, 'msg': '退出成功', 'data': ''}
