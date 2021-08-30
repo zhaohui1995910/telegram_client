@@ -59,11 +59,12 @@ def login():
     password = request.json.get("password")
 
     user = db.session.query(TMember).filter(
-        TMember.username == username
+        TMember.username == username,
+        TMember.pwd == password
     ).first()
 
     if not user:
-        return {'code': 200, 'msg': '没有找到用户', 'data': None}
+        return {'code': 200, 'msg': '请检查用户名和密码是否正确', 'data': None}
 
     current_count = client_count.get(user.id, 0)
 
@@ -75,6 +76,8 @@ def login():
         return {'code': 201, 'msg': '账号未找到或未激活', 'data': None}
 
     result_data = {
+        'user_name': user.username,
+        'user_id': user.id,
         'package_device_num': user_info.package_device_num,
         'current_count': current_count
     }
