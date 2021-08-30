@@ -75,10 +75,10 @@ def login():
         return {'code': 201, 'msg': '账号未找到或未激活', 'data': None}
 
     result_data = {
-        'user_name': user.username,
-        'user_id': user.id,
+        'user_name'         : user.username,
+        'user_id'           : user.id,
         'package_device_num': user_info.package_device_num,
-        'current_count': current_count
+        'current_count'     : current_count
     }
 
     if user:
@@ -113,7 +113,7 @@ def sign_in():
             ).save()
             return {
                 'code': 200,
-                'msg': '以到最大可登陆设备数' % _phone,
+                'msg' : '以到最大可登陆设备数' % _phone,
                 'data': None
             }
 
@@ -144,7 +144,7 @@ def sign_in():
 
     return {
         'code': 200,
-        'msg': 'success',
+        'msg' : 'success',
         'data': {'status': status}
     }
 
@@ -261,7 +261,7 @@ def get_user():
     return_rsult = []
     for i in result:
         item = {
-            'username': i.username,
+            'username'     : i.username,
             'groupmemberid': i.groupmember_id,
         }
         return_rsult.append(item)
@@ -349,7 +349,7 @@ def get_group():
     for i in result:
         item = {
             'group_name': i.group_name,
-            'group_url': i.group_url,
+            'group_url' : i.group_url,
         }
         return_rsult.append(item)
 
@@ -590,11 +590,11 @@ def get_logs():
         int(page) - 1).all()
 
     result = [{
-        'create_id': r.create_id,
-        'client_phone': r.client_phone,
-        'message_type': r.message_type,
+        'create_id'      : r.create_id,
+        'client_phone'   : r.client_phone,
+        'message_type'   : r.message_type,
         'message_content': r.message_content,
-        'create_time': r.create_time,
+        'create_time'    : r.create_time,
     } for r in item_list]
 
     return {'code': 200, 'msg': 'success', 'data': result}
@@ -622,3 +622,17 @@ def add_random_user():
     result = asyncio.gather(tasks)
 
     return {'code': 200, 'msg': 'success', 'data': result}
+
+
+@app.route("/logout", methods=['POST'])
+def logout():
+    phone = request.json.get('phone')
+    _client = client_map[phone]
+    # 退出登录
+    try:
+        asyncio.run(_client.log_out())
+    except Exception as e:
+        return {'code': 200, 'msg': '退出失败', 'data': str(e)}
+
+    client_map.pop(phone)
+    return {'code': 200, 'msg': '退出成功', 'data': ''}
