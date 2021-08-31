@@ -78,10 +78,10 @@ def login():
         return {'code': 201, 'msg': '账号未找到或未激活', 'data': None}
 
     result_data = {
-        'user_name'         : user.username,
-        'user_id'           : user.id,
+        'user_name': user.username,
+        'user_id': user.id,
         'package_device_num': user_info.package_device_num,
-        'current_count'     : current_count
+        'current_count': current_count
     }
 
     if user:
@@ -116,7 +116,7 @@ def sign_in():
             ).save()
             return {
                 'code': 200,
-                'msg' : '以到最大可登陆设备数' % _phone,
+                'msg': '以到最大可登陆设备数' % _phone,
                 'data': None
             }
 
@@ -147,7 +147,7 @@ def sign_in():
 
     return {
         'code': 200,
-        'msg' : 'success',
+        'msg': 'success',
         'data': {'status': status}
     }
 
@@ -264,7 +264,7 @@ def get_user():
     return_rsult = []
     for i in result:
         item = {
-            'username'     : i.username,
+            'username': i.username,
             'groupmemberid': i.groupmember_id,
         }
         return_rsult.append(item)
@@ -352,7 +352,7 @@ def get_group():
     for i in result:
         item = {
             'group_name': i.group_name,
-            'group_url' : i.group_url,
+            'group_url': i.group_url,
         }
         return_rsult.append(item)
 
@@ -375,20 +375,96 @@ def buli_channel_add_user():
     ).limit(int(_channel_count)).all()
 
     for channel in channel_list:
+        # user_list = db.session.query(Collectionfriend).filter(
+        #     Collectionfriend.create_id == int(_user_id)
+        # ).order_by(
+        #     func.rand()
+        # ).limit(int(_user_count)).all()
+        #
+        # thread_pool.submit(
+        #     client.channel_add_user,
+        #     _client,
+        #     # channel.group_url,
+        #     channel_url,
+        #     user_list,
+        #     _phone,
+        #     _user_id,
+        # )
+
+        # 获取要加入群组的联系人
         user_list = db.session.query(Collectionfriend).filter(
             Collectionfriend.create_id == int(_user_id)
         ).order_by(
             func.rand()
         ).limit(int(_user_count)).all()
 
-        thread_pool.submit(
-            client.channel_add_user,
-            _client,
-            channel.group_url,
-            user_list,
-            _phone,
-            _user_id,
+        # 同步阻塞
+        print('添加联系人')
+        add_user_tasks = []
+        for u in user_list:
+
+            # loop.run_until_complete(
+            #     client.add_user(
+            #         _client,
+            #         u.username,
+            #         u.first_name,
+            #         u.last_name
+            #     )
+            # )
+
+            add_user_tasks.append(
+                client.add_user(
+                    _client,
+                    u.username,
+                    u.first_name,
+                    u.last_name
+                )
+            )
+
+        # 添加联系人
+        add_user_list = loop.run_until_complete(
+            asyncio.gather(*add_user_tasks, loop=loop)
         )
+        username_list = [u.username for u in user_list]
+        TLog(
+            message_type='channel_add_user',
+            message_content=str(list(username_list)),
+            client_phone=_phone,
+            create_time=datetime.now(),
+            create_id=_user_id,
+        ).save()
+        # 获取群组对象
+        channel = loop.run_until_complete(_client.get_entity(channel.group_url))
+        user_obj_list = [InputUser(int(u.groupmember_id), int(u.access_hash)) for u in user_list]
+        # 添加用户到群组
+        try:
+            print('添加用户到群组')
+            loop.run_until_complete(_client(functions.channels.InviteToChannelRequest(
+                channel=channel,
+                users=user_obj_list
+            )))
+        except Exception as e:
+            TLog(
+                message_type='channel_add_user',
+                message_content='添加用户到群组%s失败，异常：%s' % (channel.group_url, str(e)),
+                client_phone=_phone,
+                create_time=datetime.now(),
+                create_id=_user_id,
+            ).save()
+        # 删除联系人
+        try:
+            print('删除联系人')
+            loop.run_until_complete(_client(DeleteContactsRequest(
+                id=user_obj_list,
+            )))
+        except Exception as e:
+            TLog(
+                message_type='channel_add_user',
+                message_content='删除联系人失败，异常%s' % str(e),
+                client_phone=_phone,
+                create_time=datetime.now(),
+                create_id=_user_id,
+            ).save()
 
     return {'code': 200, 'msg': 'success', 'data': '后台正在处理，请查看日志'}
 
@@ -396,10 +472,10 @@ def buli_channel_add_user():
 @app.route("/channel/addusers", methods=['POST'])
 def channel_add_user():
     """指定拉群：将群组添加随机用户"""
-    phone = request.form.get("phone")
-    channel_url = request.form.get("channel_url")
-    user_count = request.form.get("user_count")
-    user_id = request.form.get("user_id")
+    phone = request.json.get("phone")
+    channel_url = request.json.get("channel_url")
+    user_count = request.json.get("user_count")
+    user_id = request.json.get("user_id")
     _client = client_map[phone]
 
     # 获取随机用户
@@ -420,26 +496,35 @@ def channel_add_user():
     # )
 
     # 同步阻塞
+    add_user_tasks = []
     for u in user_list:
-        asyncio.run(client.add_user(
+        add_user_tasks.append(client.add_user(
             _client,
             u.username,
             u.first_name,
             u.last_name
         ))
+    add_user_list = loop.run_until_complete(asyncio.gather(*add_user_tasks))
+    print('add_user_list', add_user_list)
 
-    channel = asyncio.run(_client.get_entity(channel_url))
+    channel = loop.run_until_complete(_client.get_entity(channel_url))
 
     user_obj_list = [InputUser(int(u.groupmember_id), int(u.access_hash)) for u in user_list]
     # 4 添加用户到群组
-    asyncio.run(_client(functions.channels.InviteToChannelRequest(
-        channel=channel,
-        users=user_obj_list
-    )))
+    try:
+        loop.run_until_complete(_client(functions.channels.InviteToChannelRequest(
+            channel=channel,
+            users=user_obj_list
+        )))
+    except Exception as e:
+        return {'code': 200, 'msg': '用户到群组失败', 'data': str(e)}
 
-    _client(DeleteContactsRequest(
-        id=user_obj_list,
-    ))
+    try:
+        loop.run_until_complete(_client(DeleteContactsRequest(
+            id=user_obj_list,
+        )))
+    except Exception as e:
+        return {'code': 200, 'msg': '删除联系人失败', 'data': str(e)}
 
     return {'code': 200, 'msg': 'success', 'data': ''}
 
@@ -593,11 +678,11 @@ def get_logs():
         int(page) - 1).all()
 
     result = [{
-        'create_id'      : r.create_id,
-        'client_phone'   : r.client_phone,
-        'message_type'   : r.message_type,
+        'create_id': r.create_id,
+        'client_phone': r.client_phone,
+        'message_type': r.message_type,
         'message_content': r.message_content,
-        'create_time'    : r.create_time,
+        'create_time': r.create_time,
     } for r in item_list]
 
     return {'code': 200, 'msg': 'success', 'data': result}

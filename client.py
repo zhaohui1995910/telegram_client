@@ -220,7 +220,7 @@ async def channel_add_user(client, channel_url, user_list, phone='', user_id='')
         client, u.username, u.first_name, u.last_name
     ) for u in user_list]
     # 1.1 添加用户
-    add_user_result = await asyncio.gather(*tasks)
+    add_user_result = await asyncio.gather(*tasks, loop=loop)
 
     username_list = [u.username for u in user_list]
     TLog(
