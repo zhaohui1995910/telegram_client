@@ -15,12 +15,16 @@ from telethon.tl.functions.contacts import ImportContactsRequest, AddContactRequ
 # loop = asyncio.get_event_loop()
 
 # Use your own values from my.telegram.org
-api_id = 7053776
-api_hash = '2cc9a6b6d6bf191118813fc41fd74f7c'
+# 15397502658
+# api_id = 7053776
+# api_hash = '2cc9a6b6d6bf191118813fc41fd74f7c'
+
+# 8615397589208
+api_id = 7969633
+api_hash = 'cc8c788e0bff86a7cb62a54e995643ea'
 
 client = TelegramClient('session/test', api_id, api_hash)
 client.start()
-
 
 loop = asyncio.get_event_loop()
 
@@ -237,33 +241,66 @@ async def add_channel():
 
 # client.send_file()
 
-u = client.get_entity('@edeedeede')
-print(u)
-#
-# result = client(AddContactRequest(
-#     id=u.id,
-#     first_name=u.first_name if u.first_name else '',
-#     last_name=u.last_name if u.last_name else '',
-#
-#     phone='some string here',
-#     add_phone_privacy_exception=True
-#
-# ))
-#
-# print(result.stringify())
-
-
-# result = client(DeleteContactsRequest(
-#     id=['zSL2C4p'],
-# ))
+# u = client.get_entity('@edeedeede')
+# print(u)
 # #
+# # result = client(AddContactRequest(
+# #     id=u.id,
+# #     first_name=u.first_name if u.first_name else '',
+# #     last_name=u.last_name if u.last_name else '',
+# #
+# #     phone='some string here',
+# #     add_phone_privacy_exception=True
+# #
+# # ))
+# #
+# # print(result.stringify())
+#
+#
+# # result = client(DeleteContactsRequest(
+# #     id=['zSL2C4p'],
+# # ))
+# # #
+# # print(result.stringify())
+# channel = client.get_entity('https://t.me/chenjiahaotest')
+#
+# # user = InputUser(u.id, u.access_hash)
+# # print(u.id, u.access_hash)
+#
+# client(functions.channels.InviteToChannelRequest(
+#     channel=channel,
+#     users=[u]
+# ))
+
+
+# client.send_code_request(phone='+8617644220910', force_sms=True)
+
+# me = client.get_me()
+# client.sign_up(code='', first_name='', last_name='')
+
+# result = client(functions.auth.SignUpRequest(
+#     phone_number='some string here',
+#     phone_code_hash='some string here',
+#     first_name='some string here',
+#     last_name='some string here'
+# ))
 # print(result.stringify())
-channel = client.get_entity('https://t.me/chenjiahaotest')
+# print(me.stringify())
 
-# user = InputUser(u.id, u.access_hash)
-# print(u.id, u.access_hash)
 
-client(functions.channels.InviteToChannelRequest(
-    channel=channel,
-    users=[u]
-))
+# result = client(functions.auth.ImportAuthorizationRequest(
+#     id=me.id,
+#     bytes=bytes('hello', encoding='utf-8')
+# ))
+# print(result.stringify())
+
+channels = client.get_entity('https://t.me/soqun')
+#
+# result = client(functions.channels.JoinChannelRequest(
+#     channel=channels
+# ))
+# print(result.stringify())
+
+for m in client.iter_messages(channels, limit=5):
+    print(m)
+

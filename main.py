@@ -37,6 +37,9 @@ class Config:
     SEDN_CHANNEL_LIMIT = 6  # 发送群组数
     SEDN_USER_LIMIT = 6  # 发送群友数
 
+    SDM_API_NAME = 'api_telegramVIP_ufz'
+    SDM_PASS_WORD = 'api_telegramVIP_ufz'
+
 
 # 读取配置
 app.config.from_object(Config)

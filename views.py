@@ -8,6 +8,7 @@ import time
 import asyncio
 from datetime import datetime
 
+import requests
 from flask import request, current_app
 from sqlalchemy import desc
 from sqlalchemy.sql.expression import func
@@ -80,6 +81,7 @@ def login():
     result_data = {
         'user_name': user.username,
         'user_id': user.id,
+        'token': user.id,
         'package_device_num': user_info.package_device_num,
         'current_count': current_count
     }
@@ -259,7 +261,7 @@ def get_user():
 
     result = db.session.query(Collectionfriend).filter(
         Collectionfriend.create_id == int(user_id)
-    ).limit(int(page_size)).offset((page - 1) * int(page_size)).all()
+    ).limit(int(page_size)).offset((int(page) - 1) * int(page_size)).all()
 
     return_rsult = []
     for i in result:
@@ -346,7 +348,7 @@ def get_group():
 
     result = db.session.query(Collectiongroup).filter(
         Collectiongroup.create_id == int(user_id)
-    ).limit(int(page_size)).offset((page - 1) * int(page_size)).all()
+    ).limit(int(page_size)).offset((int(page) - 1) * int(page_size)).all()
 
     return_rsult = []
     for i in result:
@@ -402,7 +404,6 @@ def buli_channel_add_user():
         print('添加联系人')
         add_user_tasks = []
         for u in user_list:
-
             # loop.run_until_complete(
             #     client.add_user(
             #         _client,
@@ -736,3 +737,57 @@ def get_contacts():
     print(result)
 
     return {'code': 200, 'msg': '退出成功', 'data': ''}
+
+
+def sign_up():
+    """注册Telegram账号"""
+    _phone = request.json.get('phone')
+    first_name = request.json.get('first_name')
+    last_name = request.json.get('last_name')
+    _client = client_map[_phone]
+
+    sdm_api_name = current_app.config.get('SDM_API_NAME')
+    sdm_pass_word = current_app.config.get('SDM_PASS_WORD')
+    sdm_login_url = 'http://sudim.cn:88/yhapi.ashx?act=login&ApiName={}&PassWord={}'.format(sdm_api_name, sdm_pass_word)
+    # 1 登陆速递码获取token
+    response1 = requests.get(sdm_login_url)
+    login_text = response1.text.split('|')
+    token = login_text[1] if len(login_text) == 2 else ''
+    if not token:
+        return {'code': 200, 'msg': 'sdm token fail', 'data': ''}
+    # 2 获取手机号
+    # 1|141616740851026|2021-09-04T18:35:29|COM3|16740851026|联通|河北沧州
+    get_phone_url = 'http://sudim.cn:88/yhapi.ashx?' \
+                    'act=getPhone&token={}&iid=1416&did=&operator=&provi=&city=&seq=&mobile='.format(token)
+
+    response2 = requests.get(get_phone_url)
+    phone_text = response2.text.split('|')
+    if len(phone_text) != 7:
+        return {'code': 200, 'msg': 'sdm get phone fail', 'data': ''}
+
+    phone_pid = phone_text[1]
+    phone = phone_text[4]
+
+    # 3 发送telegram验证码  client.send_code_request(phone)
+    loop.run_until_complete(_client.send_code_request('+86' + phone))
+
+    # 4 根据（2）返回的pid获取验证码
+    get_code_url = 'http://sudim.cn:88/yhapi.ashx?' \
+                   'act=getPhoneCode&token={}&pid={}'.format(token, phone_pid)
+
+    code = None
+    for n in range(30):
+        time.sleep(1)
+        response3 = requests.get(get_code_url)
+        if response3.text:
+            break
+
+    if not code:
+        return {'code': 200, 'msg': '获取验证码超时', 'data': ''}
+
+    # 5 注册telegram账号 client.sign_up(code, first_name='Anna', last_name='Banana')
+    sign_up_result = loop.run_until_complete(
+        _client.sign_up(code, first_name=first_name, last_name=last_name)
+    )
+
+    return {'code': 200, 'msg': '注册成功', 'data': {'phone': phone, 'first_name': first_name, 'last_name': last_name}}

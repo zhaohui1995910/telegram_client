@@ -471,3 +471,14 @@ async def delete_user(client, username_list):
     delete_result = await client(DeleteContactsRequest(
         id=username_list,
     ))
+
+
+@thread_async
+async def sign_up(client, code, first_name, last_name):
+    result = await client.sign_up(
+        code,
+        first_name=first_name,
+        last_name=last_name
+    )
+
+    return result
