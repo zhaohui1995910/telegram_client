@@ -2,6 +2,8 @@
 import asyncio
 import os
 from concurrent.futures import ThreadPoolExecutor
+import logging
+from logging.handlers import TimedRotatingFileHandler
 
 from flask import Flask
 from flask_cors import CORS
@@ -43,11 +45,32 @@ class Config:
     SDM_PASS_WORD = 'api_telegramVIP_ufz'
 
 
+def add_logger(app):
+    logging_format = logging.Formatter(
+        '%(asctime)s - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)s - %(message)s'
+    )
+    handler = TimedRotatingFileHandler(
+        "telegram_client/logs/log.log",
+        when="D",
+        interval=1,
+        backupCount=15,
+        encoding="UTF-8",
+        delay=False,
+        utc=True
+    )
+    handler.setFormatter(logging_format)
+    handler.setLevel(logging.DEBUG)
+    app.logger.setLevel(logging.DEBUG)
+    app.logger.addHandler(handler)
+
+
 # 读取配置
 app.config.from_object(Config)
 
 # 创建数据库sqlalchemy工具对象
 db = SQLAlchemy(app)
+# 添加日志
+add_logger(app)
 
 loop = asyncio.get_event_loop()
 thread_pool = ThreadPoolExecutor(10)
