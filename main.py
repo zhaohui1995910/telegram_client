@@ -50,7 +50,7 @@ def add_logger(app):
         '%(asctime)s - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)s - %(message)s'
     )
     handler = TimedRotatingFileHandler(
-        "telegram_client/logs/log.log",
+        "logs/log.log",
         when="D",
         interval=1,
         backupCount=15,

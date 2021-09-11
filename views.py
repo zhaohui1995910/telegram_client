@@ -145,7 +145,7 @@ def sign_in():
             ).save()
             return {
                 'code': 200,
-                'msg': '以到最大可登陆设备数' % _phone,
+                'msg': '%s 以到最大可登陆设备数' % _phone,
                 'data': None
             }
 
@@ -742,8 +742,14 @@ def add_random_user():
 
 @app.route("/user/logout", methods=['POST'])
 def logout():
+    _member_id = request.json.get("member_id")
     phone = request.json.get('phone')
     _client = client_map[phone]
+
+    c = client_count.get(_member_id, 0)
+    if c > 0:
+        client_count[_member_id] = c - 1
+
     # 退出登录
     try:
         loop.run_until_complete(_client.log_out())
