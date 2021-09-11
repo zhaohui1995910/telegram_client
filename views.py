@@ -9,7 +9,7 @@ import asyncio
 from datetime import datetime
 
 import requests
-from flask import request, current_app
+from flask import request, current_app, g
 from sqlalchemy import desc
 from sqlalchemy.sql.expression import func
 from telethon.tl.types import InputUser
@@ -81,7 +81,7 @@ def login():
     result_data = {
         'user_name': user.username,
         'user_id': user.id,
-        'token': user.id,
+        'token': str(user.id),
         'package_device_num': user_info.package_device_num,
         'current_count': current_count
     }
@@ -99,14 +99,14 @@ def login():
 def user_info():
     user_id = request.args.get("user_id")
     if not user_id:
-        return {'code': 200, 'msg': 'user_id不能为空', 'data': ''}
+        return {'code': 200, 'msg': 'user_id不能为空', 'data': {}}
 
     user = db.session.query(TMember).filter(
         TMember.id == int(user_id)
     ).first()
 
     if not user_info:
-        return {'code': 200, 'msg': '没找到用户信息', 'data': ''}
+        return {'code': 200, 'msg': '没找到用户信息', 'data': {}}
     else:
         result = {
             "introduction": "",
@@ -185,9 +185,9 @@ def send_code():
     if _client is not None:
         loop.run_until_complete(client.send_code(_client, code))
 
-        return {'code': 200, 'msg': 'success', 'data': None}
+        return {'code': 200, 'msg': 'success', 'data': {}}
     else:
-        return {'code': 200, 'msg': 'success', 'data': None}
+        return {'code': 200, 'msg': 'success', 'data': {}}
 
 
 @app.route("/getMe", methods=['GET'])
@@ -213,7 +213,7 @@ def get_dialogs():
     for dia in dialogs_list:
         print(dia)
 
-    return {'code': 200, 'msg': 'success', 'data': None}
+    return {'code': 200, 'msg': 'success', 'data': {}}
 
 
 @app.route("/crawl/channel/username", methods=['GET'])
@@ -488,7 +488,7 @@ def buli_channel_add_user():
                 create_id=_user_id,
             ).save()
 
-    return {'code': 200, 'msg': 'success', 'data': '后台正在处理，请查看日志'}
+    return {'code': 200, 'msg': '后台正在处理，请查看日志', 'data': {}}
 
 
 @app.route("/channel/addusers", methods=['POST'])
@@ -539,14 +539,14 @@ def channel_add_user():
             users=user_obj_list
         )))
     except Exception as e:
-        return {'code': 200, 'msg': '用户到群组失败', 'data': str(e)}
+        return {'code': 200, 'msg': '用户到群组失败', 'data': {'error': str(e)}}
 
     try:
         loop.run_until_complete(_client(DeleteContactsRequest(
             id=user_obj_list,
         )))
     except Exception as e:
-        return {'code': 200, 'msg': '删除联系人失败', 'data': str(e)}
+        return {'code': 200, 'msg': '删除联系人失败', 'data': {'error': str(e)}}
 
     return {'code': 200, 'msg': 'success', 'data': ''}
 
@@ -616,7 +616,7 @@ def buli_send_to_user():
     #     )
     # )
 
-    return {'code': 200, 'msg': 'success', 'data': '消息正在发送,请不要重复发送,请查看日志'}
+    return {'code': 200, 'msg': '消息正在发送,请不要重复发送,请查看日志', 'data': {}}
 
 
 @app.route("/send/channel", methods=['POST'])
@@ -680,7 +680,7 @@ def buli_send_to_channel():
     #     )
     # )
 
-    return {'code': 200, 'msg': 'success', 'data': '消息正在发送,请不要重复发送,请查看日志'}
+    return {'code': 200, 'msg': '消息正在发送,请不要重复发送,请查看日志', 'data': {}}
 
 
 @app.route("/logs", methods=['GET'])
@@ -734,7 +734,7 @@ def add_random_user():
     return {'code': 200, 'msg': 'success', 'data': result}
 
 
-@app.route("/logout", methods=['POST'])
+@app.route("/user/logout", methods=['POST'])
 def logout():
     phone = request.json.get('phone')
     _client = client_map[phone]
@@ -742,10 +742,10 @@ def logout():
     try:
         loop.run_until_complete(_client.log_out())
     except Exception as e:
-        return {'code': 200, 'msg': '退出失败', 'data': str(e)}
+        return {'code': 200, 'msg': '退出失败', 'data': {'error': str(e)}}
 
     client_map.pop(phone)
-    return {'code': 200, 'msg': '退出成功', 'data': ''}
+    return {'code': 200, 'msg': '退出成功', 'data': {}}
 
 
 @app.route('/get/contacts', methods=['GET'])
@@ -757,7 +757,7 @@ def get_contacts():
     result = loop.run_until_complete(_client(GetContactsRequest(hash=0)))
     print(result)
 
-    return {'code': 200, 'msg': '退出成功', 'data': ''}
+    return {'code': 200, 'msg': '退出成功', 'data': {}}
 
 
 def sign_up():
@@ -775,7 +775,7 @@ def sign_up():
     login_text = response1.text.split('|')
     token = login_text[1] if len(login_text) == 2 else ''
     if not token:
-        return {'code': 200, 'msg': 'sdm token fail', 'data': ''}
+        return {'code': 200, 'msg': 'sdm token fail', 'data': {}}
     # 2 获取手机号
     # 1|141616740851026|2021-09-04T18:35:29|COM3|16740851026|联通|河北沧州
     get_phone_url = 'http://sudim.cn:88/yhapi.ashx?' \
@@ -784,7 +784,7 @@ def sign_up():
     response2 = requests.get(get_phone_url)
     phone_text = response2.text.split('|')
     if len(phone_text) != 7:
-        return {'code': 200, 'msg': 'sdm get phone fail', 'data': ''}
+        return {'code': 200, 'msg': 'sdm get phone fail', 'data': {}}
 
     phone_pid = phone_text[1]
     phone = phone_text[4]
@@ -804,7 +804,7 @@ def sign_up():
             break
 
     if not code:
-        return {'code': 200, 'msg': '获取验证码超时', 'data': ''}
+        return {'code': 200, 'msg': '获取验证码超时', 'data': {}}
 
     # 5 注册telegram账号 client.sign_up(code, first_name='Anna', last_name='Banana')
     sign_up_result = loop.run_until_complete(

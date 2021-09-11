@@ -4,12 +4,14 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 
 from flask import Flask
+from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from tornado.wsgi import WSGIContainer
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
 
 app = Flask(__name__)
+CORS(app, supports_credentials=True)
 
 
 # 此程序只能运行单线程
@@ -18,11 +20,11 @@ class Config:
     """配置参数"""
     config_env = os.environ.get('SPIDER_WEB_ENV', 'dev').lower()
     # 设置连接数据库的URL
-    # app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://%s:%s@%s:31306/%s?charset=utf8mb4' % (
-    #     'officialwebsite', 'Kf8EfwMFxEbDmeL6', '127.0.0.1', 'officialwebsite')
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://%s:%s@%s:31306/%s?charset=utf8mb4' % (
+        'officialwebsite', 'Kf8EfwMFxEbDmeL6', '127.0.0.1', 'officialwebsite')
 
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://%s:%s@%s:3306/%s?charset=utf8mb4' % (
-        'root', '123456', '192.168.1.100', 'test')
+    # app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://%s:%s@%s:3306/%s?charset=utf8mb4' % (
+    #     'root', '123456', '192.168.1.100', 'test')
 
     # 设置sqlalchemy自动更跟踪数据库
     SQLALCHEMY_TRACK_MODIFICATIONS = True
