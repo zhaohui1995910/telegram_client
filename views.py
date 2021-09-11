@@ -24,6 +24,12 @@ client_count = {}
 client_map = {}
 
 
+# @app.before_request
+# def app_before_request():
+#     token = request.headers.get('X-Token')
+#     g.user_id = int(token)
+
+
 @app.route('/test', methods=['POST', 'GET'])
 def test_view():
     print(current_app.config.get('CRAWL_USER_MAXCOUNT'))
