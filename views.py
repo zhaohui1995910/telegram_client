@@ -95,6 +95,27 @@ def login():
         return {'code': 200, 'msg': '没有找到该用户', 'data': result_data}
 
 
+@app.route('/user/info', methods=['GET'])
+def user_info():
+    user_id = request.json.get("user_id")
+    if not user_id:
+        return {'code': 200, 'msg': 'user_id不能为空', 'data': ''}
+
+    user = db.session.query(TMember).filter(
+        TMember.id == int(user_id)
+    ).first()
+
+    if not user_info:
+        return {'code': 200, 'msg': '没找到用户信息', 'data': ''}
+    else:
+        result = {
+            "introduction": "",
+            "avatar": "",
+            "name": user.username
+        }
+        return {'code': 200, 'msg': 'success', 'data': result}
+
+
 @app.route('/sign_in', methods=['POST'])
 def sign_in():
     """添加用户"""
@@ -708,7 +729,7 @@ def add_random_user():
         for u in user_list
     ]
 
-    result = asyncio.run(asyncio.gather(tasks))
+    result = loop.run_until_complete(asyncio.gather(tasks))
 
     return {'code': 200, 'msg': 'success', 'data': result}
 
@@ -719,7 +740,7 @@ def logout():
     _client = client_map[phone]
     # 退出登录
     try:
-        asyncio.run(_client.log_out())
+        loop.run_until_complete(_client.log_out())
     except Exception as e:
         return {'code': 200, 'msg': '退出失败', 'data': str(e)}
 
@@ -733,7 +754,7 @@ def get_contacts():
     phone = request.args.get('phone')
     _client = client_map[phone]
 
-    result = asyncio.run(_client(GetContactsRequest(hash=0)))
+    result = loop.run_until_complete(_client(GetContactsRequest(hash=0)))
     print(result)
 
     return {'code': 200, 'msg': '退出成功', 'data': ''}
