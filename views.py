@@ -97,7 +97,7 @@ def login():
 
 @app.route('/user/info', methods=['GET'])
 def user_info():
-    user_id = request.json.get("user_id")
+    user_id = request.args.get("user_id")
     if not user_id:
         return {'code': 200, 'msg': 'user_id不能为空', 'data': ''}
 
