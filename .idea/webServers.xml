@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="ad3ff60b-b005-4e9c-a469-020216e97fa6" name="telegram">
+        <fileTransfer accessType="SFTP" host="47.241.211.163" port="22" sshConfigId="919241b5-42c6-4bff-8e87-0a85e912e4dc" sshConfig="root@47.241.211.163:22 password">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>

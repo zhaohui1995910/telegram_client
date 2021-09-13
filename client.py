@@ -115,7 +115,10 @@ async def resolve_id(_id):
 
 
 async def sign_in(phone, _id, _hash):
-    _client = TelegramClient('session/' + phone, int(_id), _hash, loop=loop)
+    try:
+        _client = TelegramClient('session/' + phone, int(_id), _hash, loop=loop)
+    except Exception as e:
+        return e
 
     await _client.connect()
 

@@ -7,6 +7,7 @@ import re
 import time
 import asyncio
 from datetime import datetime
+from functools import wraps
 
 import requests
 from flask import request, current_app, g
@@ -62,6 +63,41 @@ def index():
     return 'Index Page'
 
 
+def identity_auth(_func):
+    """
+    装饰器，检查用户身份是否有效
+    :param _func:
+    :return:
+    """
+
+    @wraps(_func)
+    def _wraps(*args, **kwargs):
+        if request.method == 'get' or request.method == 'GET':
+            phone = request.args.get('phone', '')
+        else:
+            phone = request.json.get('phone', '')
+
+        _client = client_map.get(phone)
+        if _client:
+            status = loop.run_until_complete(_client.is_user_authorized())
+            if not status:
+                return {
+                    'code': 403,
+                    'msg': '%s 设备未认证' % phone,
+                    'data': None
+                }
+        else:
+            return {
+                'code': 200,
+                'msg': '%s 设备未登陆' % phone,
+                'data': None
+            }
+
+        return _func(*args, **kwargs)
+
+    return _wraps
+
+
 @app.route('/login', methods=['POST'])
 def login():
     username = request.json.get("username")
@@ -111,14 +147,22 @@ def user_info():
         TMember.id == int(user_id)
     ).first()
 
-    if not user_info:
+    if not user:
         return {'code': 200, 'msg': '没找到用户信息', 'data': {}}
     else:
         result = {
             "introduction": "",
             "avatar": "",
-            "name": user.username
+            "name": user.username,
         }
+        user_info = db.session.query(TMemberInfo).filter(
+            TMemberInfo.member_id == int(user_id)
+        ).first()
+        if user_info:
+            result['package_device_num'] = user_info.package_device_num
+            result['sign_device_num'] = client_count.get(int(user_id), 0)
+            print(client_count)
+
         return {'code': 200, 'msg': 'success', 'data': result}
 
 
@@ -158,9 +202,16 @@ def sign_in():
             create_time=datetime.now(),
             create_id=_member_id,
         ).save()
-        return {'code': 200, 'msg': '%s 设别已登陆' % _phone, 'data': None}
+        return {'code': 200, 'msg': '%s 设备已登陆' % _phone, 'data': None}
 
-    _client, status = loop.run_until_complete(client.sign_in(_phone, _api_id, _api_hash))
+    try:
+        _client, status = loop.run_until_complete(client.sign_in(_phone, _api_id, _api_hash))
+    except Exception as e:
+        return {
+            'code': 200,
+            'msg': str(e),
+            'data': {}
+        }
 
     if _client:
         client_map[_phone] = _client
@@ -173,11 +224,17 @@ def sign_in():
             create_time=datetime.now(),
             create_id=_member_id,
         ).save()
+    else:
+        return {
+            'code': 200,
+            'msg': 'success',
+            'data': {'error': str(status)}
+        }
 
     return {
         'code': 200,
         'msg': 'success',
-        'data': {'status': status}
+        'data': {'status': status, 'sign_device_num': client_count[_member_id]}
     }
 
 
@@ -197,6 +254,7 @@ def send_code():
 
 
 @app.route("/getMe", methods=['GET'])
+@identity_auth
 def get_me():
     """获取自己信息"""
     _phone = request.args.get("phone")
@@ -209,6 +267,7 @@ def get_me():
 
 
 @app.route("/getDialogs", methods=['GET'])
+@identity_auth
 def get_dialogs():
     """获取对话框"""
     _phone = request.args.get("phone")
@@ -222,12 +281,18 @@ def get_dialogs():
     return {'code': 200, 'msg': 'success', 'data': {}}
 
 
-@app.route("/crawl/channel/username", methods=['GET'])
+@app.route("/crawl/channel/username", methods=['GET', 'POST'])
+@identity_auth
 def spider_group_user():
     """采集群友"""
-    _phone = request.args.get("phone")
-    _url = request.args.get("url")
-    _user_id = request.args.get("user_id")
+    # _phone = request.args.get("phone")
+    # _url = request.args.get("url")
+    # _user_id = request.args.get("user_id")
+
+    _phone = request.json.get("phone")
+    _url = request.json.get("url")
+    _user_id = request.json.get("user_id")
+
     _client = client_map[_phone]
 
     crawl_user_list = loop.run_until_complete(client.spider_group_user(_client, _url))
@@ -274,7 +339,7 @@ def spider_group_user():
         if not i.username:
             continue
 
-        return_rsult.append(i.username)
+        return_rsult.append({'name': i.username})
 
     return {'code': 200, 'msg': 'success', 'data': return_rsult}
 
@@ -302,6 +367,7 @@ def get_user():
 
 
 @app.route("/crawl/channel/url", methods=['GET'])
+@identity_auth
 def spider_group_url():
     """收集群组"""
     _user_id = request.args.get("user_id")
@@ -317,6 +383,8 @@ def spider_group_url():
 
     group_url_list = [g.group_url for g in group_list]
 
+    sum_count = 0
+    del_count = 0
     for msg in msg_list:
         content: str = msg.message
         content_list = content.split('\n\n')
@@ -328,14 +396,17 @@ def spider_group_url():
 
         entities: list = msg.entities
 
+        # 判断群组链接
         for i, t in enumerate(title_list):
             if '👥' in t:
+                sum_count += 1
                 entity = entities[i + 1]
                 url = entity.url
                 if url in group_url_list:
+                    del_count += 1
                     continue
 
-                result.append((t, url))
+                result.append({'name': t, 'vaule': url})
 
                 item = Collectiongroup()
                 # item.group_name = t.replace('👥', '')  # 因 '👥' 编码问题无法写入数据库
@@ -348,7 +419,7 @@ def spider_group_url():
     for r in result[:crawl_channel_maxcount]:
         item = Collectiongroup()
         # item.group_name = t.replace('👥', '')  # 因 '👥' 编码问题无法写入数据库
-        item.group_url = r[1]
+        item.group_url = r['vaule']
         item.createtime = datetime.now()
         item.create_id = int(_user_id)
         db.session.add(item)
@@ -357,7 +428,7 @@ def spider_group_url():
 
     TLog(
         message_type='crawl_channel_url',
-        message_content='采集群组 %s 条, 去重 %s 条' % (len(msg_list), (len(msg_list) - len(result[:crawl_channel_maxcount]))),
+        message_content='采集群组 %s 条, 去重 %s 条' % (sum_count, del_count),
         client_phone=_phone,
         create_time=datetime.now(),
         create_id=_user_id
@@ -389,6 +460,7 @@ def get_group():
 
 
 @app.route("/buli/channel/addusers", methods=['POST'])
+@identity_auth
 def buli_channel_add_user():
     """批量加群"""
     _phone = request.json.get("phone")
@@ -455,25 +527,25 @@ def buli_channel_add_user():
         )
         username_list = [u.username for u in user_list]
         TLog(
-            message_type='channel_add_user',
+            message_type='buli_channel_addusers',
             message_content=str(list(username_list)),
             client_phone=_phone,
             create_time=datetime.now(),
             create_id=_user_id,
         ).save()
         # 获取群组对象
-        channel = loop.run_until_complete(_client.get_entity(channel.group_url))
+        tg_channel = loop.run_until_complete(_client.get_entity(channel.group_url))
         user_obj_list = [InputUser(int(u.groupmember_id), int(u.access_hash)) for u in user_list]
         # 添加用户到群组
         try:
             print('添加用户到群组')
             loop.run_until_complete(_client(functions.channels.InviteToChannelRequest(
-                channel=channel,
+                channel=tg_channel,
                 users=user_obj_list
             )))
         except Exception as e:
             TLog(
-                message_type='channel_add_user',
+                message_type='buli_channel_addusers',
                 message_content='添加用户到群组%s失败，异常：%s' % (channel.group_url, str(e)),
                 client_phone=_phone,
                 create_time=datetime.now(),
@@ -487,7 +559,7 @@ def buli_channel_add_user():
             )))
         except Exception as e:
             TLog(
-                message_type='channel_add_user',
+                message_type='buli_channel_addusers',
                 message_content='删除联系人失败，异常%s' % str(e),
                 client_phone=_phone,
                 create_time=datetime.now(),
@@ -498,6 +570,7 @@ def buli_channel_add_user():
 
 
 @app.route("/channel/addusers", methods=['POST'])
+@identity_auth
 def channel_add_user():
     """指定拉群：将群组添加随机用户"""
     phone = request.json.get("phone")
@@ -533,7 +606,6 @@ def channel_add_user():
             u.last_name
         ))
     add_user_list = loop.run_until_complete(asyncio.gather(*add_user_tasks))
-    print('add_user_list', add_user_list)
 
     channel = loop.run_until_complete(_client.get_entity(channel_url))
 
@@ -545,6 +617,14 @@ def channel_add_user():
             users=user_obj_list
         )))
     except Exception as e:
+        TLog(
+            message_type='channel_addusers',
+            message_content='添加用户到群组%s失败，异常：%s' % (channel.group_url, str(e)),
+            client_phone=phone,
+            create_time=datetime.now(),
+            create_id=user_id,
+        ).save()
+
         return {'code': 200, 'msg': '用户到群组失败', 'data': {'error': str(e)}}
 
     try:
@@ -552,12 +632,20 @@ def channel_add_user():
             id=user_obj_list,
         )))
     except Exception as e:
+        TLog(
+            message_type='channel_addusers',
+            message_content='删除联系人失败，异常%s' % str(e),
+            client_phone=phone,
+            create_time=datetime.now(),
+            create_id=user_id,
+        ).save()
         return {'code': 200, 'msg': '删除联系人失败', 'data': {'error': str(e)}}
 
-    return {'code': 200, 'msg': 'success', 'data': ''}
+    return {'code': 200, 'msg': 'success', 'data': {}}
 
 
 @app.route("/send/users", methods=['POST'])
+@identity_auth
 def buli_send_to_user():
     user_count = request.json.get('user_count')
     user_id = request.json.get('user_id')
@@ -626,6 +714,7 @@ def buli_send_to_user():
 
 
 @app.route("/send/channel", methods=['POST'])
+@identity_auth
 def buli_send_to_channel():
     channel_count = request.json.get('channel_count')
     user_id = request.json.get('user_id')
@@ -693,7 +782,7 @@ def buli_send_to_channel():
 def get_logs():
     message_type = request.args.get('message_type')
     user_id = request.args.get('user_id')
-    page = request.args.get('page')
+    page = request.args.get('page', 1)
 
     filter_dict = {}
     if message_type:
@@ -717,6 +806,7 @@ def get_logs():
 
 
 @app.route("/add/user", methods=['GET'])
+@identity_auth
 def add_random_user():
     """添加用户"""
     _phone = request.args.get("phone")
@@ -744,6 +834,10 @@ def add_random_user():
 def logout():
     _member_id = request.json.get("member_id")
     phone = request.json.get('phone')
+
+    if not client_map.get(phone):
+        return {'code': 200, 'msg': '账号未登陆', 'data': {}}
+
     _client = client_map[phone]
 
     c = client_count.get(_member_id, 0)
@@ -761,6 +855,7 @@ def logout():
 
 
 @app.route('/get/contacts', methods=['GET'])
+@identity_auth
 def get_contacts():
     """获取联系人"""
     phone = request.args.get('phone')
